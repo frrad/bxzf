@@ -1,5 +1,8 @@
 A library to enable random access to multi-block xz files.
 
+Using the algorithm described here
+https://blastedbio.blogspot.com/2013/04/random-access-to-blocked-xz-format-bxzf.html
+
 ## How to compress
 
 try something like
