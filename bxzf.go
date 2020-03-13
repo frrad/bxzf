@@ -3,7 +3,6 @@ package bxzf
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 )
 
@@ -42,21 +41,19 @@ func OpenFile(filename string) (ReaderAt, error) {
 // init builds the index to keep track of offsets for separately compressed
 // blocks within the compressed file
 func (r *ReaderAt) init() error {
-	footerOffset := int64(r.size) - int64(xzStreamFooterSize)
+	footerOffset := r.size - int64(xzStreamFooterSize)
 	footer, err := r.parseFooterAt(footerOffset)
-
-	indexSize := footer.RealBackwardSize()
-	indexOffset := r.size - int64(xzStreamFooterSize) - int64(indexSize)
-	indexBytes := make([]byte, indexSize)
-	bytesRead, err := r.cprsReader.ReadAt(indexBytes, indexOffset)
-	if uint64(bytesRead) != indexSize {
-		return fmt.Errorf("couldn't read a complete index")
-	}
 	if err != nil {
 		return err
 	}
 
-	log.Fatalf("%s", showBytes(indexBytes[:100]))
+	indexOffset := footerOffset - int64(footer.RealBackwardSize())
+	index, err := r.parseIndexAt(indexOffset)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(index)
 
 	return nil
 }
@@ -67,4 +64,13 @@ func showBytes(in []byte) string {
 		ans += fmt.Sprintf("%x ", x)
 	}
 	return ans + "]"
+}
+
+func readExactly(r io.ReaderAt, off int64, nBytes uint64) ([]byte, error) {
+	outBytes := make([]byte, nBytes)
+	n, err := r.ReadAt(outBytes, off)
+	if n != int(nBytes) {
+		return outBytes, fmt.Errorf("read %d != %d bytes", n, nBytes)
+	}
+	return outBytes, err
 }

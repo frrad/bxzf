@@ -34,11 +34,7 @@ func (f xzStreamFooter) Check() error {
 // parseFooterAt attempts to parse an xzStreamFooter starting at the given
 // offset.
 func (r *ReaderAt) parseFooterAt(footerOffset int64) (xzStreamFooter, error) {
-	footerBytes := make([]byte, xzStreamFooterSize)
-	bytesRead, err := r.cprsReader.ReadAt(footerBytes, footerOffset)
-	if uint64(bytesRead) != xzStreamFooterSize {
-		return xzStreamFooter{}, fmt.Errorf("couldn't read a complete footer")
-	}
+	footerBytes, err := readExactly(r.cprsReader, footerOffset, xzStreamFooterSize)
 	if err != nil {
 		return xzStreamFooter{}, err
 	}
