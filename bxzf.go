@@ -74,3 +74,46 @@ func readExactly(r io.ReaderAt, off int64, nBytes uint64) ([]byte, error) {
 	}
 	return outBytes, err
 }
+
+func readExactlyOne(r io.ReaderAt, off int64) (byte, error) {
+	bs, err := readExactly(r, off, 1)
+	if err != nil {
+		return 0x0, err
+	}
+	return bs[0], nil
+}
+
+// parseNumberAt attempts to parse a variable-length multibyte integer as
+// described in 1.2 of the spec at the given offset. It returns the number, and
+// the length of its encoded representation in bytes.
+func (r *ReaderAt) parseNumberAt(offset int64) (uint64, uint32, error) {
+
+	sizeMax := uint32(9)
+
+	currentByte, err := readExactlyOne(r.cprsReader, offset)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	num := uint64(currentByte & 0x7f)
+
+	i := uint32(1)
+
+	for currentByte&0x80 != 0 {
+
+		currentByte, err = readExactlyOne(r.cprsReader, offset+int64(i))
+		if err != nil {
+			return 0, 0, err
+		}
+
+		if i >= sizeMax || currentByte == 0x00 {
+			return num, 0, nil
+		}
+
+		num |= uint64(currentByte&0x7F) << (i * 7)
+
+		i++
+	}
+
+	return num, i, nil
+}

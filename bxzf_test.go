@@ -1,7 +1,10 @@
 package bxzf_test
 
 import (
+	"bytes"
 	"fmt"
+	"log"
+	"os"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -16,8 +19,20 @@ func TestInit(t *testing.T) {
 	t.Run(description, func(t *testing.T) {
 		g := NewGomegaWithT(t)
 
-		_, err := bxzf.OpenFile(filename)
+		var err error
+		output := captureOutput(func() {
+			_, err = bxzf.OpenFile(filename)
+		})
 
+		t.Error(output)
 		g.Expect(err).To(BeNil())
 	})
+}
+
+func captureOutput(f func()) string {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	f()
+	log.SetOutput(os.Stderr)
+	return buf.String()
 }
