@@ -1,8 +1,9 @@
 package bxzf
 
 import (
+	"encoding/binary"
 	"fmt"
-	"log"
+	"hash/crc32"
 )
 
 const (
@@ -15,6 +16,7 @@ const (
 type xzStreamIndex struct {
 	NumRecords uint64
 	Records    []xzStreamIndexRecord
+	CRC32      [4]byte
 }
 
 type xzStreamIndexRecord struct {
@@ -34,27 +36,27 @@ func (r *ReaderAt) parseIndexAt(offset int64) (xzStreamIndex, error) {
 		return ix, fmt.Errorf("index indicator byte %x != %x", indexIndicatorBytes[0], xzStreamIndicatorMagic)
 	}
 
-	offset += int64(xzStreamIndicatorSize)
-	numRecords, bytesInNumRep, err := r.parseNumberAt(offset)
+	offsetInIndex := int64(xzStreamIndicatorSize)
+	numRecords, bytesInNumRep, err := r.parseNumberAt(offset + offsetInIndex)
 	if err != nil {
 		return ix, err
 	}
 
-	offset += int64(bytesInNumRep)
+	offsetInIndex += int64(bytesInNumRep)
 
 	ix.NumRecords = numRecords
 	for i := uint64(0); i < numRecords; i++ {
-		unpaddedSize, offsetDiff, err := r.parseNumberAt(offset)
+		unpaddedSize, offsetDiff, err := r.parseNumberAt(offset + offsetInIndex)
 		if err != nil {
 			return ix, err
 		}
-		offset += int64(offsetDiff)
+		offsetInIndex += int64(offsetDiff)
 
-		uncompressedSize, offsetDiff, err := r.parseNumberAt(offset)
+		uncompressedSize, offsetDiff, err := r.parseNumberAt(offset + offsetInIndex)
 		if err != nil {
 			return ix, err
 		}
-		offset += int64(offsetDiff)
+		offsetInIndex += int64(offsetDiff)
 
 		ix.Records = append(ix.Records, xzStreamIndexRecord{
 			UncompressedSize: uncompressedSize,
@@ -62,7 +64,38 @@ func (r *ReaderAt) parseIndexAt(offset int64) (xzStreamIndex, error) {
 		})
 	}
 
-	log.Println(len(ix.Records[:3]))
+	offsetWithPadding := roundUpFour(offsetInIndex)
+	if offsetInIndex != offsetWithPadding {
+		paddingLen := uint64(offsetWithPadding - offsetInIndex)
+		paddingBytes, err := readExactly(r.cprsReader, offset+offsetInIndex, paddingLen)
+		if err != nil {
+			return ix, err
+		}
+		err = nullBytes(paddingBytes)
+		if err != nil {
+			return ix, err
+		}
+	}
+
+	checksum32, err := readExactly(r.cprsReader, offset+offsetWithPadding, 4)
+	if err != nil {
+		return ix, err
+	}
+
+	copy(ix.CRC32[:], checksum32)
+
+	allBytes, err := readExactly(r.cprsReader, offset, uint64(offsetWithPadding))
+	if err != nil {
+		return ix, err
+	}
+
+	if crc32.ChecksumIEEE(allBytes) != ix.CRC32Uint() {
+		return ix, fmt.Errorf("checksum fail")
+	}
 
 	return ix, nil
+}
+
+func (f xzStreamIndex) CRC32Uint() uint32 {
+	return binary.LittleEndian.Uint32(f.CRC32[:])
 }

@@ -48,12 +48,12 @@ func (r *ReaderAt) init() error {
 	}
 
 	indexOffset := footerOffset - int64(footer.RealBackwardSize())
-	index, err := r.parseIndexAt(indexOffset)
+	_, err = r.parseIndexAt(indexOffset)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(index)
+	//	fmt.Println(index)
 
 	return nil
 }
@@ -116,4 +116,22 @@ func (r *ReaderAt) parseNumberAt(offset int64) (uint64, uint32, error) {
 	}
 
 	return num, i, nil
+}
+
+func roundUpFour(x int64) int64 {
+	lastTwoBits := x & 3
+
+	if lastTwoBits != 0 {
+		return x - lastTwoBits + 4
+	}
+	return x
+}
+
+func nullBytes(in []byte) error {
+	for _, b := range in {
+		if b != 0x0 {
+			return fmt.Errorf("expected null byte")
+		}
+	}
+	return nil
 }

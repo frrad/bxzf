@@ -24,7 +24,7 @@ func TestInit(t *testing.T) {
 			_, err = bxzf.OpenFile(filename)
 		})
 
-		t.Error(output)
+		g.Expect(output).To(Equal(""))
 		g.Expect(err).To(BeNil())
 	})
 }
